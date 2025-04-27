@@ -6,11 +6,11 @@ import (
 	"os"
 	"strconv"
 
+	"errors"
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/cors"
 	"github.com/jan0009/Lab-VerteilteSysteme/models"
 	"github.com/jan0009/Lab-VerteilteSysteme/storage"
-	"errors"
 	"gorm.io/gorm"
 )
 
@@ -56,16 +56,24 @@ func (r *Repository) DeleteItem(context *fiber.Ctx) error {
 		return nil
 	}
 
-	err := r.DB.Delete(itemModel, id).Error
-
-	if err != nil {
+	result := r.DB.Delete(&itemModel, id)
+	if result.Error != nil {
 		context.Status(http.StatusBadRequest).JSON(&fiber.Map{
 			"message": "could not delete item",
 		})
-		return err
+		return result.Error
 	}
+
+	// Check if anything was actually deleted
+	if result.RowsAffected == 0 {
+		context.Status(http.StatusNotFound).JSON(&fiber.Map{
+			"message": "item not found",
+		})
+		return nil
+	}
+
 	context.Status(http.StatusOK).JSON(&fiber.Map{
-		"message": "item delete successfully",
+		"message": "item deleted successfully",
 	})
 	return nil
 }
@@ -80,17 +88,15 @@ func (r *Repository) GetItems(context *fiber.Ctx) error {
 		return err
 	}
 
-	context.Status(http.StatusOK).JSON(&fiber.Map{
-		"message": "items fetched successfully",
-		"data":    itemModels,
-	})
+	context.Status(http.StatusOK).JSON(itemModels)
+
 	return nil
 }
 
 func (r *Repository) GetItemByID(context *fiber.Ctx) error {
 
 	id := context.Params("id")
-	itemModel := &models.Items{}
+	itemModel := models.Items{}
 	if id == "" {
 		context.Status(http.StatusInternalServerError).JSON(&fiber.Map{
 			"message": "id cannot be empty",
@@ -98,17 +104,20 @@ func (r *Repository) GetItemByID(context *fiber.Ctx) error {
 		return nil
 	}
 
-	err := r.DB.Where("id = ?", id).First(itemModel).Error
+	err := r.DB.Where("id = ?", id).First(&itemModel).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		context.Status(http.StatusNotFound).JSON(
+			&fiber.Map{"message": "item not found"})
+		return nil
+	}
 	if err != nil {
-		context.Status(http.StatusBadRequest).JSON(
+		context.Status(http.StatusInternalServerError).JSON(
 			&fiber.Map{"message": "could not get the item"})
-		return err
+		return nil
 	}
 
-	context.Status(http.StatusOK).JSON(&fiber.Map{
-		"message": "item id fetched successfully",
-		"data":    itemModel,
-	})
+	context.Status(http.StatusOK).JSON(itemModel)
+
 	return nil
 }
 
@@ -169,7 +178,7 @@ func (r *Repository) UpdateItem(context *fiber.Ctx) error {
 	}
 
 	context.Status(http.StatusOK).JSON(existingItem)
-	
+
 	return nil
 }
 
