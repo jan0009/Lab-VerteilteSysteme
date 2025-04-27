@@ -1,135 +1,218 @@
 package main
 
 import (
-	"github.com/gofiber/fiber/v2"
-	// "github.com/gofiber/fiber/v2/middleware/cors"
+	"log"
+	"net/http"
+	"os"
 	"strconv"
+
+	"github.com/gofiber/fiber/v2"
+	"github.com/gofiber/fiber/v2/middleware/cors"
+	"github.com/jan0009/Lab-VerteilteSysteme/models"
+	"github.com/jan0009/Lab-VerteilteSysteme/storage"
+	"errors"
+	"gorm.io/gorm"
 )
 
 type Item struct {
-	ID       int    `json:"id"`
 	Name     string `json:"name"`
 	Quantity int    `json:"quantity"`
 }
 
-var items = []Item{
-	{ID: 1, Name: "Apples", Quantity: 5},
-	{ID: 2, Name: "Bread", Quantity: 2},
-	{ID: 3, Name: "Milk", Quantity: 1},
+type Repository struct {
+	DB *gorm.DB
 }
 
-func getNextId() int {
-	maxId := 0
-	for _, item := range items {
-		if item.ID > maxId {
-			maxId = item.ID
-		}
-	}
-	return maxId + 1
-}
+func (r *Repository) CreateItem(context *fiber.Ctx) error {
+	item := Item{}
 
-func getAllItems(c *fiber.Ctx) error {
-	return c.Status(fiber.StatusOK).JSON(items)
-}
+	err := context.BodyParser(&item)
 
-func getItemById(c *fiber.Ctx) error {
-	idParam := c.Params("itemId")
-	itemId, err := strconv.Atoi(idParam)
 	if err != nil {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"message": "Invalid item ID"})
+		context.Status(http.StatusUnprocessableEntity).JSON(
+			&fiber.Map{"message": "request failed"})
+		return err
 	}
 
-	for _, item := range items {
-		if item.ID == itemId {
-			return c.Status(fiber.StatusOK).JSON(item)
-		}
-	}
-	return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"message": "Item not found"})
-}
-
-func createOrUpdateItem(c *fiber.Ctx) error {
-	newItem := new(Item)
-	if err := c.BodyParser(newItem); err != nil {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"message": "Invalid input"})
-	}
-
-	if newItem.Name == "" || newItem.Quantity < 0 {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"message": "Name is required and quantity must be a number"})
-	}
-
-	for i, item := range items {
-		if item.Name == newItem.Name {
-			items[i].Quantity += newItem.Quantity
-			return c.Status(fiber.StatusOK).JSON(items[i])
-		}
-	}
-
-	newItem.ID = getNextId()
-	items = append(items, *newItem)
-	return c.Status(fiber.StatusCreated).JSON(newItem)
-}
-
-func updateItem(c *fiber.Ctx) error {
-	idParam := c.Params("itemId")
-	itemId, err := strconv.Atoi(idParam)
+	err = r.DB.Create(&item).Error
 	if err != nil {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"message": "Invalid item ID"})
+		context.Status(http.StatusBadRequest).JSON(
+			&fiber.Map{"message": "could not create item"})
+		return err
 	}
 
-	updatedItem := new(Item)
-	if err := c.BodyParser(updatedItem); err != nil {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"message": "Invalid input"})
-	}
-
-	if updatedItem.Name == "" || updatedItem.Quantity < 0 {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"message": "Name is required and quantity must be a number"})
-	}
-
-	for i, item := range items {
-		if item.ID == itemId {
-			for j, other := range items {
-				if other.Name == updatedItem.Name && other.ID != itemId {
-					items[j].Quantity += updatedItem.Quantity
-					items = append(items[:i], items[i+1:]...)
-					return c.Status(fiber.StatusOK).JSON(items[j])
-				}
-			}
-			items[i] = Item{ID: itemId, Name: updatedItem.Name, Quantity: updatedItem.Quantity}
-			return c.Status(fiber.StatusOK).JSON(items[i])
-		}
-	}
-	return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"message": "Item not found"})
+	context.Status(http.StatusOK).JSON(&fiber.Map{
+		"message": "item has been added"})
+	return nil
 }
 
-func deleteItem(c *fiber.Ctx) error {
-	idParam := c.Params("itemId")
-	itemId, err := strconv.Atoi(idParam)
-	if err != nil {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"message": "Invalid item ID"})
+func (r *Repository) DeleteItem(context *fiber.Ctx) error {
+	itemModel := models.Items{}
+	id := context.Params("id")
+	if id == "" {
+		context.Status(http.StatusInternalServerError).JSON(&fiber.Map{
+			"message": "id cannot be empty",
+		})
+		return nil
 	}
 
-	for i, item := range items {
-		if item.ID == itemId {
-			items = append(items[:i], items[i+1:]...)
-			return c.SendStatus(fiber.StatusNoContent)
-		}
+	err := r.DB.Delete(itemModel, id).Error
+
+	if err != nil {
+		context.Status(http.StatusBadRequest).JSON(&fiber.Map{
+			"message": "could not delete item",
+		})
+		return err
 	}
-	return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"message": "Item not found"})
+	context.Status(http.StatusOK).JSON(&fiber.Map{
+		"message": "item delete successfully",
+	})
+	return nil
+}
+
+func (r *Repository) GetItems(context *fiber.Ctx) error {
+	itemModels := &[]models.Items{}
+
+	err := r.DB.Find(itemModels).Error
+	if err != nil {
+		context.Status(http.StatusBadRequest).JSON(
+			&fiber.Map{"message": "could not get items"})
+		return err
+	}
+
+	context.Status(http.StatusOK).JSON(&fiber.Map{
+		"message": "items fetched successfully",
+		"data":    itemModels,
+	})
+	return nil
+}
+
+func (r *Repository) GetItemByID(context *fiber.Ctx) error {
+
+	id := context.Params("id")
+	itemModel := &models.Items{}
+	if id == "" {
+		context.Status(http.StatusInternalServerError).JSON(&fiber.Map{
+			"message": "id cannot be empty",
+		})
+		return nil
+	}
+
+	err := r.DB.Where("id = ?", id).First(itemModel).Error
+	if err != nil {
+		context.Status(http.StatusBadRequest).JSON(
+			&fiber.Map{"message": "could not get the item"})
+		return err
+	}
+
+	context.Status(http.StatusOK).JSON(&fiber.Map{
+		"message": "item id fetched successfully",
+		"data":    itemModel,
+	})
+	return nil
+}
+
+func (r *Repository) UpdateItem(context *fiber.Ctx) error {
+	item := Item{}
+	id := context.Params("id")
+
+	if id == "" {
+		context.Status(http.StatusInternalServerError).JSON(&fiber.Map{
+			"message": "id cannot be empty",
+		})
+		return nil
+	}
+
+	itemID, parseErr := strconv.Atoi(id)
+	if parseErr != nil {
+		context.Status(http.StatusBadRequest).JSON(&fiber.Map{
+			"message": "invalid item id",
+		})
+		return parseErr
+	}
+
+	err := context.BodyParser(&item)
+	if err != nil {
+		context.Status(http.StatusUnprocessableEntity).JSON(
+			&fiber.Map{"message": "request failed"},
+		)
+		return err
+	}
+
+	existingItem := models.Items{}
+
+	err = r.DB.First(&existingItem, itemID).Error
+
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		context.Status(http.StatusNotFound).JSON(&fiber.Map{
+			"message": "item with id not found",
+		})
+		return nil
+	}
+
+	if err != nil {
+		context.Status(http.StatusNotFound).JSON(&fiber.Map{
+			"message": "item not found",
+		})
+		return err
+	}
+
+	existingItem.Name = &item.Name
+	existingItem.Quantity = &item.Quantity
+
+	saveErr := r.DB.Save(&existingItem).Error
+	if saveErr != nil {
+		context.Status(http.StatusBadRequest).JSON(&fiber.Map{
+			"message": "could not update item",
+		})
+		return saveErr
+	}
+
+	context.Status(http.StatusOK).JSON(existingItem)
+	
+	return nil
+}
+
+func (r *Repository) SetupRoutes(app *fiber.App) {
+	api := app.Group("/items")
+	api.Post("/", r.CreateItem)
+	api.Delete("/:id", r.DeleteItem)
+	api.Put("/:id", r.UpdateItem)
+	api.Get("/:id", r.GetItemByID)
+	api.Get("/", r.GetItems)
 }
 
 func main() {
+
+	config := &storage.Config{
+		Host:     os.Getenv("DB_HOST"),
+		Port:     os.Getenv("DB_PORT"),
+		Password: os.Getenv("DB_PASS"),
+		User:     os.Getenv("DB_USER"),
+		SSLMode:  os.Getenv("DB_SSLMODE"),
+		DBName:   os.Getenv("DB_NAME"),
+	}
+
+	db, err := storage.NewConnection(config)
+
+	if err != nil {
+		log.Fatal("could not load the database")
+	}
+	err = models.MigrateBooks(db)
+	if err != nil {
+		log.Fatal("could not migrate db")
+	}
+
+	r := Repository{
+		DB: db,
+	}
 	app := fiber.New()
 
-	// app.Use(cors.New(cors.Config{
-	// 	AllowOrigins: "http://localhost:5173", // oder "*" für alle
-	// 	AllowMethods: "GET,POST,PUT,DELETE",
-	// }))
+	app.Use(cors.New(cors.Config{
+		AllowOrigins: "http://localhost:5173", // oder "*" für alle
+		AllowMethods: "GET,POST,PUT,DELETE",
+	}))
 
-	app.Get("/items", getAllItems)
-	app.Get("/items/:itemId", getItemById)
-	app.Post("/items", createOrUpdateItem)
-	app.Put("/items/:itemId", updateItem)
-	app.Delete("/items/:itemId", deleteItem)
-
+	r.SetupRoutes(app)
 	app.Listen(":8080")
 }
