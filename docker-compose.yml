@@ -1,18 +1,6 @@
 version: '3.8'
 
 services:
-  # frontend:
-  #   build:
-  #     context: ./frontend
-  #     dockerfile: Dockerfile
-  #   ports:
-  #     - "5173:5173" 
-  #   networks:
-  #     - app-network
-  #   depends_on:
-  #     - postgres
-  #     - backend
-
   frontend:
     container_name: frontendflask
     build:

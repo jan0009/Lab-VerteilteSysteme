@@ -72,9 +72,8 @@ func (r *Repository) DeleteItem(context *fiber.Ctx) error {
 		return nil
 	}
 
-	context.Status(http.StatusOK).JSON(&fiber.Map{
-		"message": "item deleted successfully",
-	})
+	context.SendStatus(fiber.StatusNoContent)
+
 	return nil
 }
 
