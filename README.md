@@ -37,14 +37,28 @@ Diese Trennung erlaubt unabhängiges Deployen, Skalieren und Entwickeln einzelne
 
 ### Minikube
 
+- **Minikube starten** 
+
+```bash
 minikube start 
+```
 
+```bash
 kubectl apply -f ./kubernetes
+```
+- **Port Forward für Codespace** 
 
+```bash
 kubectl port-forward service/frontend 5000:5000
+```
 
 ### Kind
 
-kind create cluster --config kindCluster.yml 
+- **Kind starten** 
 
+```bash
+kind create cluster --config kindCluster.yml  
+```
+```bash
 kubectl apply -f ./kubernetes
+``` 
