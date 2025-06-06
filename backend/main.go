@@ -23,6 +23,14 @@ type Repository struct {
 	DB *gorm.DB
 }
 
+func (r *Repository) GetHostname(c *fiber.Ctx) error {
+	hostname, err := os.Hostname()
+	if err != nil {
+		hostname = "Unknown"
+	}
+	return c.SendString(hostname)
+}
+
 func (r *Repository) CreateItem(context *fiber.Ctx) error {
 	item := Item{}
 
@@ -188,6 +196,9 @@ func (r *Repository) SetupRoutes(app *fiber.App) {
 	api.Put("/:id", r.UpdateItem)
 	api.Get("/:id", r.GetItemByID)
 	api.Get("/", r.GetItems)
+
+	app.Get("/hostname", r.GetHostname)
+
 }
 
 func main() {
@@ -217,7 +228,7 @@ func main() {
 	app := fiber.New()
 
 	app.Use(cors.New(cors.Config{
-		AllowOrigins: "http://localhost:5173", // oder "*" für alle
+		AllowOrigins: "http://localhost:5000", // oder "*" für alle
 		AllowMethods: "GET,POST,PUT,DELETE",
 	}))
 
