@@ -32,3 +32,19 @@ Diese Trennung erlaubt unabhängiges Deployen, Skalieren und Entwickeln einzelne
 - **10. Dev/Prod Parity**: Entwicklung, Test und Produktion laufen in weitgehend identischen Umgebungen dank Containerisierung.
 - **11. Logs**: Logs werden auf STDOUT/STDERR ausgegeben und zentral über Docker verarbeitet – keine Log-Dateien im Container selbst.
 - **12. Admin Processes**: Administrative Tasks (wie DB-Migrationen) könnten als einmalige Jobs gestartet werden.
+
+## Kubernetes
+
+### Minikube
+
+minikube start 
+
+kubectl apply -f ./kubernetes
+
+kubectl port-forward service/frontend 5000:5000
+
+### Kind
+
+kind create cluster --config kindCluster.yml 
+
+kubectl apply -f ./kubernetes
