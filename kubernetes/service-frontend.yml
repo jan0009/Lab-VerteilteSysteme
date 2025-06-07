@@ -12,5 +12,3 @@ spec:
     nodePort: 30001 
   selector:
     app: frontend
-status:
-  loadBalancer: {}
