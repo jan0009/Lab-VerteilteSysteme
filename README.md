@@ -62,3 +62,19 @@ kind create cluster --config kindCluster.yml
 ```bash
 kubectl apply -f ./kubernetes
 ``` 
+
+### Command
+
+- **Nützliche Commands**
+
+```bash
+kubectl exec -it <pod> -- /bin/bash
+```
+
+```bash
+apt update && apt install curl -y
+```
+
+```bash
+curl http://backend:8080/hostname
+```
